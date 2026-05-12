@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""DETECCAR_ARDUINO: Detecção de Veículos e Controle Físico de Semáforo com YOLOv8"""
+"""DETECCAR_ARDUINO: Detecção de Veículos e Controle Físico de Múltiplos Semáforos com YOLOv8"""
 
 import os
 import cv2
 import time
 import serial
+import numpy as np
 from ultralytics import YOLO
 
 # 📌 Configurações de Porta Serial (Ajuste para a porta onde o Arduino está conectado)
@@ -23,98 +24,154 @@ except serial.SerialException:
     print("Modo de Simulação ativado (apenas imprimindo no console).")
 
 # 📌 Caminhos dos arquivos (usando caminho relativo para portabilidade)
-# Se você tiver uma webcam ao vivo, pode substituir VIDEO_PATH por 0 (ex: VIDEO_PATH = 0)
-VIDEO_PATH = 'transito.mp4'
+# Utilizando transito.mp4 como fonte para o cruzamento 1
+VIDEO_PATH_1 = 'transito.mp4'
 
-# Caminho do Colab do arquivo original, verifique se está no diretorio atual
-if not os.path.exists(VIDEO_PATH):
-    VIDEO_PATH = '/content/drive/MyDrive/Colab Notebooks/transito.mp4'
+# Como não temos um segundo vídeo diferente no momento, vamos usar o mesmo 
+# para simular o segundo cruzamento. Você pode alterar este caminho futuramente.
+VIDEO_PATH_2 = 'transito.mp4' 
 
 MODEL_PATH = 'yolov8n.pt'  # 📌 Modelo YOLOv8 pré-treinado
 model = YOLO(MODEL_PATH)
 
-def processar_video_e_controlar_semaforo(video_path):
+def processar_video_e_controlar_semaforo(video_path1, video_path2):
     # Inicia a captura de vídeo
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"❌ Não foi possível abrir o vídeo (ou câmera): {video_path}")
+    cap1 = cv2.VideoCapture(video_path1)
+    cap2 = cv2.VideoCapture(video_path2)
+    
+    if not cap1.isOpened():
+        print(f"❌ Não foi possível abrir o vídeo (ou câmera): {video_path1}")
+        return
+    if not cap2.isOpened():
+        print(f"❌ Não foi possível abrir o vídeo (ou câmera): {video_path2}")
         return
 
     esperando_ciclo_terminar = False
+    semaforo_aberto = 0 # 0 = nenhum, 1 = cruzamento 1, 2 = cruzamento 2
+    ciclos_espera_1 = 0
+    ciclos_espera_2 = 0
     
-    print("\nIniciando sistema de detecção...\nPressione 'q' na janela de vídeo para sair.")
+    print("\nIniciando sistema de detecção para Múltiplos Cruzamentos...\nPressione 'q' na janela de vídeo para sair.")
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            # Reinicia o vídeo se chegar ao fim (para testes contínuos)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            continue
+    while cap1.isOpened() and cap2.isOpened():
+        ret1, frame1 = cap1.read()
+        ret2, frame2 = cap2.read()
+        
+        if not ret1:
+            cap1.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret1, frame1 = cap1.read()
+        if not ret2:
+            cap2.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret2, frame2 = cap2.read()
 
         # 🔹 Inferência da Detecção (conf=0.5 reduz falsos positivos)
-        results = model.predict(frame, imgsz=640, conf=0.5, verbose=False)
-        boxes = results[0].boxes
+        # Filtrando apenas classes relacionadas a trânsito: 2 (carro), 3 (moto), 5 (ônibus), 7 (caminhão)
+        classes_transito = [2, 3, 5, 7]
+        results1 = model.predict(frame1, imgsz=640, conf=0.5, classes=classes_transito, verbose=False)
+        results2 = model.predict(frame2, imgsz=640, conf=0.5, classes=classes_transito, verbose=False)
         
-        # 🔹 Lógica de Tipagem de Veículos (IDs do COCO Dataset)
-        carros = 0
-        motos = 0
-        pesados = 0 # Ônibus (5) e Caminhões (7)
-        
-        if boxes is not None:
-            for box in boxes:
-                cls_id = int(box.cls[0])
-                if cls_id == 2:
-                    carros += 1
-                elif cls_id == 3:
-                    motos += 1
-                elif cls_id in [5, 7]:
-                    pesados += 1
+        # 🔹 Função para contar os veículos nos resultados
+        def contar_veiculos(boxes):
+            carros = 0
+            motos = 0
+            pesados = 0
+            if boxes is not None:
+                for box in boxes:
+                    cls_id = int(box.cls[0])
+                    if cls_id == 2:
+                        carros += 1
+                    elif cls_id == 3:
+                        motos += 1
+                    elif cls_id in [5, 7]:
+                        pesados += 1
+            return carros, motos, pesados
 
-        # 🔹 Lógica de Cálculo do Tempo Verde
-        # Pesos (ajustáveis): Carro precisa de 1.5s, Moto de 1s, Caminhão/Ônibus de 3s
-        tempo_calculado = int((carros * 1.5) + (motos * 1) + (pesados * 3))
-        
-        # Definimos limites de segurança: o verde fica no mínimo 5s e no máximo 30s
-        tempo_verde = max(5, min(tempo_calculado, 30))
+        carros1, motos1, pesados1 = contar_veiculos(results1[0].boxes)
+        carros2, motos2, pesados2 = contar_veiculos(results2[0].boxes)
 
-        # 🔹 Comunicação com o Arduino
-        # 1. Verifica se o Arduino mandou alguma mensagem (ex: terminou o ciclo e fechou o sinal)
+        # 🔹 Lógica de Cálculo de Pressão e Starvation
+        # Pesos: Carro (1.5), Moto (1.0), Pesados (3.0)
+        pressao_base_1 = (carros1 * 1.5) + (motos1 * 1.0) + (pesados1 * 3.0)
+        pressao_base_2 = (carros2 * 1.5) + (motos2 * 1.0) + (pesados2 * 3.0)
+        
+        # Adiciona bônus de starvation (tempo de espera) para forçar o cruzamento a abrir eventualmente
+        pressao_total_1 = pressao_base_1 + (ciclos_espera_1 * 5)
+        pressao_total_2 = pressao_base_2 + (ciclos_espera_2 * 5)
+
+        # 🔹 Comunicação com o Arduino (Verifica se o ciclo anterior acabou)
         if arduino and arduino.in_waiting > 0:
             resposta = arduino.readline().decode('utf-8').strip()
             if resposta == "CICLO_COMPLETO":
                 esperando_ciclo_terminar = False
-                print("Sinal vermelho. Pronto para nova leitura.")
+                print("Ciclo completo. Pronto para nova avaliação.")
 
-        # 2. Se não estamos esperando o Arduino terminar um ciclo verde/amarelo, podemos mandar abrir!
+        # 🔹 Tomada de decisão: Qual semáforo abrir?
         if not esperando_ciclo_terminar:
-            comando = f"G:{tempo_verde}\n"
+            if pressao_total_1 >= pressao_total_2:
+                # Vencedor é o Cruzamento 1
+                vencedor = 1
+                # O tempo de verde é baseado na pressão REAL do cruzamento, e não no bônus de espera
+                tempo_verde = max(5, min(int(pressao_base_1), 30))
+                comando = f"G1:{tempo_verde}\n"
+                
+                # Reseta o ciclo de espera de quem abriu e incrementa quem ficou esperando
+                ciclos_espera_1 = 0
+                ciclos_espera_2 += 1
+            else:
+                # Vencedor é o Cruzamento 2
+                vencedor = 2
+                tempo_verde = max(5, min(int(pressao_base_2), 30))
+                comando = f"G2:{tempo_verde}\n"
+                
+                ciclos_espera_2 = 0
+                ciclos_espera_1 += 1
+                
+            semaforo_aberto = vencedor
+            
             if arduino:
                 arduino.write(comando.encode('utf-8'))
             esperando_ciclo_terminar = True
-            print(f"🚦 Enviando sinal Verde por {tempo_verde}s (Carros:{carros}, Motos:{motos}, Pesados:{pesados})")
+            print(f"🚦 Enviando Verde p/ Cruzamento {vencedor} por {tempo_verde}s (C1={pressao_total_1:.1f}, C2={pressao_total_2:.1f})")
 
-        # 🔹 Anotação do frame para visualização (Display)
-        frame_anotado = results[0].plot()
+        # 🔹 Anotação dos frames para visualização (Display)
+        frame1_anotado = results1[0].plot()
+        frame2_anotado = results2[0].plot()
         
-        # Adiciona os textos na tela
-        status_txt = "Aguardando..." if esperando_ciclo_terminar else "Calculando novo ciclo"
-        cv2.putText(frame_anotado, f"Tempo Calculado para Verde: {tempo_verde}s", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-        cv2.putText(frame_anotado, f"Deteccoes -> Car:{carros} | Moto:{motos} | Pesados:{pesados}", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        cv2.putText(frame_anotado, f"Status Arduino: {status_txt}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        # Redimensionar para ficar amigável na tela lado a lado
+        frame1_anotado = cv2.resize(frame1_anotado, (640, 480))
+        frame2_anotado = cv2.resize(frame2_anotado, (640, 480))
         
-        # Exibe o frame na tela (Funciona no Windows/Linux, não funciona dentro do Google Colab puro sem adaptações)
-        cv2.imshow('Deteccao de Veiculos e Controle Arduino', frame_anotado)
+        cor_verde = (0, 255, 0)
+        cor_vermelha = (0, 0, 255)
         
-        # Reduz velocidade do vídeo (opcional, para visualização melhor) e checa se usuário apertou 'q'
+        # Textos do Cruzamento 1
+        status1 = "VERDE" if semaforo_aberto == 1 else "VERMELHO"
+        cv2.putText(frame1_anotado, "CRUZAMENTO 1", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+        cv2.putText(frame1_anotado, f"Status: {status1}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, cor_verde if semaforo_aberto == 1 else cor_vermelha, 2)
+        cv2.putText(frame1_anotado, f"Pressao: {pressao_base_1:.1f} | Espera: {ciclos_espera_1}", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+        # Textos do Cruzamento 2
+        status2 = "VERDE" if semaforo_aberto == 2 else "VERMELHO"
+        cv2.putText(frame2_anotado, "CRUZAMENTO 2", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+        cv2.putText(frame2_anotado, f"Status: {status2}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, cor_verde if semaforo_aberto == 2 else cor_vermelha, 2)
+        cv2.putText(frame2_anotado, f"Pressao: {pressao_base_2:.1f} | Espera: {ciclos_espera_2}", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        
+        # Combinar as imagens lado a lado
+        frame_combinado = np.hstack((frame1_anotado, frame2_anotado))
+        
+        # Exibe o frame na tela
+        cv2.imshow('Controle Inteligente de Multiplos Cruzamentos', frame_combinado)
+        
         if cv2.waitKey(30) & 0xFF == ord('q'):
             break
 
     # Libera os recursos ao final
-    cap.release()
+    cap1.release()
+    cap2.release()
     cv2.destroyAllWindows()
     if arduino:
         arduino.close()
         print("Conexão Serial fechada.")
 
 if __name__ == "__main__":
-    processar_video_e_controlar_semaforo(VIDEO_PATH)
+    processar_video_e_controlar_semaforo(VIDEO_PATH_1, VIDEO_PATH_2)
