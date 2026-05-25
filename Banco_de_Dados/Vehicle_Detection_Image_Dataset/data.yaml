@@ -1,0 +1,6 @@
+path: C:/Users/JhonPotato/Documents/identificacao-veiculos-main/identificacao-veiculos-main/Banco_de_Dados/Vehicle_Detection_Image_Dataset
+train: train/images
+val: valid/images
+
+nc: 1
+names: ['Vehicle']
