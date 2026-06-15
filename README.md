@@ -3,6 +3,51 @@
 
 Este repositório contém o código-fonte e os recursos necessários para um projeto de detecção de veículos utilizando Inteligência Artificial. A detecção é realizada por meio da combinação de técnicas de Visão Computacional e Redes Neurais Convolucionais (CNN). Como o GitHub não permiti que carregue mais de 100 arquivos de uma vez e que o tamanho limite é de 15 TB, estarei deixando na secção de Referências o link do Dropbox com as imagens utilizadas para treinar a IA. 
 
+   - **Logic Controller:** Cérebro da aplicação contendo o motor Fuzzy.
+4. **Camada de Dados:** PostgreSQL para armazenamento de histórico persistente e Redis para cache de altíssima velocidade.
+
+### 📊 Fluxo de Arquitetura
+
+```mermaid
+graph TD
+    subgraph Edge Layer [Camada de Borda - Python]
+        C[Câmera/Vídeo] -->|Frames a 30 FPS| P[Python + YOLOv8]
+        P -->|Comando Serial| A[Arduino / Semáforo Físico]
+    end
+
+    subgraph Messaging Layer [Mensageria]
+        MQ((RabbitMQ))
+    end
+
+    subgraph Microservices Layer [Microsserviços - Java Spring Boot]
+        EU[Eureka Server\nService Discovery]
+        GW[API Gateway\nPorta 8081]
+        LC[Logic Controller\nMotor Fuzzy]
+
+        EU -.->|Registra| GW
+        EU -.->|Registra| LC
+    end
+
+    subgraph Data Layer [Camada de Dados]
+        PG[(PostgreSQL\nHistórico)]
+        RD[(Redis\nCache)]
+    end
+
+    %% Fluxos principais
+    P -->|vehicle.detected\nemergency.alert| MQ
+    MQ -->|Consome| LC
+    LC -->|Calcula Pressão\ntraffic.command| MQ
+    MQ -->|Escuta Decisão| P
+    LC -->|Salva Histórico| PG
+    LC -->|Cache (TTL 5m)| RD
+    P -.->|WebSockets Telemetria| DB[Web Dashboard]
+    DB <-->|Ajustes REST| GW
+    GW -->|Roteamento| LC
+```
+
+## 💻 Stack Tecnológica
+
+*   **IA e Visão:** Python 3.10+, OpenCV, Ultralytics (YOLOv8)
 
 
 ## 🎥 Demonstração simples
