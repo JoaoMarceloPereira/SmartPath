@@ -44,9 +44,9 @@ flowchart LR
     end
 
     %% Fluxos principais
-    YOLO -->|vehicle.detected<br>emergency.alert| MQ
+    YOLO -->|"vehicle.detected<br>emergency.alert"| MQ
     MQ -->|Consome filas| LC
-    LC -->|traffic.command<br>(Decisão Fuzzy)| MQ
+    LC -->|"traffic.command<br>(Decisão Fuzzy)"| MQ
     MQ -->|Escuta comandos| YOLO
 
     LC -->|Persiste dados| PG
