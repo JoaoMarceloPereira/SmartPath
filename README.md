@@ -28,9 +28,9 @@ flowchart LR
 
     subgraph CloudLayer ["☁️ Microsserviços (Java Spring Boot)"]
         direction TB
-        EU["🌐 Eureka Server\n(Service Discovery)"]
-        GW["🚪 API Gateway\n(Porta 8081)"]
-        LC["⚙️ Logic Controller\n(Motor Fuzzy)"]
+        EU["🌐 Eureka Server<br>(Service Discovery)"]
+        GW["🚪 API Gateway<br>(Porta 8081)"]
+        LC["⚙️ Logic Controller<br>(Motor Fuzzy)"]
 
         EU -.->|Registra| GW
         EU -.->|Registra| LC
@@ -39,14 +39,14 @@ flowchart LR
 
     subgraph DataLayer ["🗄️ Camada de Dados"]
         direction TB
-        PG[("🐘 PostgreSQL\n(Histórico)")]
-        RD[("⚡ Redis\n(Cache)")]
+        PG[("🐘 PostgreSQL<br>(Histórico)")]
+        RD[("⚡ Redis<br>(Cache)")]
     end
 
     %% Fluxos principais
-    YOLO -->|vehicle.detected\nemergency.alert| MQ
+    YOLO -->|vehicle.detected<br>emergency.alert| MQ
     MQ -->|Consome filas| LC
-    LC -->|traffic.command\n(Decisão Fuzzy)| MQ
+    LC -->|traffic.command<br>(Decisão Fuzzy)| MQ
     MQ -->|Escuta comandos| YOLO
 
     LC -->|Persiste dados| PG
