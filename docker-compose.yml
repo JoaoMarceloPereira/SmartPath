@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: smartpath-postgres
+    environment:
+      POSTGRES_USER: smartpath
+      POSTGRES_PASSWORD: smartpath123
+      POSTGRES_DB: smartpath
+    ports:
+      - "5433:5432" # Mapeado para 5433 para evitar conflito com o Windows
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartpath-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: smartpath-rabbitmq
+    ports:
+      - "5673:5672"   # Mapeada para 5673 na máquina hospedeira para evitar conflito
+      - "15673:15672" # Porta do painel web mapeada para 15673 para evitar conflito
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
