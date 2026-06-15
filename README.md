@@ -1,139 +1,153 @@
 
 # Detecção de Veículos com IA
 
-Este repositório contém o código-fonte e os recursos necessários para um projeto de detecção de veículos utilizando Inteligência Artificial. A detecção é realizada por meio da combinação de técnicas de Visão Computacional e Redes Neurais Convolucionais (CNN). Como o GitHub não permiti que carregue mais de 100 arquivos de uma vez e que o tamanho limite é de 15 TB, estarei deixando na secção de Referências o link do Dropbox com as imagens utilizadas para treinar a IA. 
+Este repositório contém o código-fonte e os recursos desenvolvidos para o projeto acadêmico de controle inteligente de tráfego, também conhecido como SmartPath (Semáforo Inteligente). O sistema propõe a automação e otimização do fluxo de veículos em cruzamentos por meio de Inteligência Artificial. A detecção é realizada em tempo real utilizando técnicas avançadas de Visão Computacional e Redes Neurais Convolucionais (modelo YOLOv8). 
 
-   - **Logic Controller:** Cérebro da aplicação contendo o motor Fuzzy.
-4. **Camada de Dados:** PostgreSQL para armazenamento de histórico persistente e Redis para cache de altíssima velocidade.
+### Estrutura do Sistema
+A arquitetura do projeto foi desenhada sob o paradigma de microsserviços e processamento na borda (*Edge Computing*), dividindo-se nas seguintes frentes:
+1. **Camada de Borda (Edge Computing):** Responsável pela captura de vídeo (câmeras de trânsito) e processamento inferencial local em Python para detecção de classes e volumes de veículos.
+2. **Camada de Mensageria:** Emprega o RabbitMQ como *message broker* para garantir uma comunicação assíncrona, tolerante a falhas e de baixa latência entre a visão computacional e o *backend*.
+3. **Camada de Microsserviços:** Ecossistema robusto em Java (Spring Boot, Spring Cloud, Eureka e API Gateway). O serviço central é o **Logic Controller**, que atua como cérebro da aplicação utilizando um Motor de Lógica Fuzzy para decidir dinamicamente os tempos dos semáforos.
+4. **Camada de Dados:** Utiliza PostgreSQL para persistência do histórico do tráfego e métricas, em conjunto com o Redis (*cache* em memória) para acessos de altíssima performance aos estados mais recentes.
 
 ### 📊 Fluxo de Arquitetura
 
 ```mermaid
-graph TD
-    subgraph Edge Layer [Camada de Borda - Python]
-        C[Câmera/Vídeo] -->|Frames a 30 FPS| P[Python + YOLOv8]
-        P -->|Comando Serial| A[Arduino / Semáforo Físico]
+flowchart LR
+    subgraph EdgeLayer ["📍 Camada de Borda (Python & Hardware)"]
+        direction TB
+        CAM[📷 Câmera / Vídeo] -->|Frames a 30 FPS| YOLO["🧠 Detecção (Python + YOLOv8)"]
+        YOLO -->|Comando Serial| ARD["🚦 Arduino (Semáforo)"]
+        YOLO -.->|WebSockets| DASH["📊 Web Dashboard"]
     end
 
-    subgraph Messaging Layer [Mensageria]
-        MQ((RabbitMQ))
+    subgraph Messaging ["📨 Mensageria"]
+        direction TB
+        MQ(("🐇 RabbitMQ"))
     end
 
-    subgraph Microservices Layer [Microsserviços - Java Spring Boot]
-        EU[Eureka Server\nService Discovery]
-        GW[API Gateway\nPorta 8081]
-        LC[Logic Controller\nMotor Fuzzy]
+    subgraph CloudLayer ["☁️ Microsserviços (Java Spring Boot)"]
+        direction TB
+        EU["🌐 Eureka Server\n(Service Discovery)"]
+        GW["🚪 API Gateway\n(Porta 8081)"]
+        LC["⚙️ Logic Controller\n(Motor Fuzzy)"]
 
         EU -.->|Registra| GW
         EU -.->|Registra| LC
+        GW -->|Roteamento REST| LC
     end
 
-    subgraph Data Layer [Camada de Dados]
-        PG[(PostgreSQL\nHistórico)]
-        RD[(Redis\nCache)]
+    subgraph DataLayer ["🗄️ Camada de Dados"]
+        direction TB
+        PG[("🐘 PostgreSQL\n(Histórico)")]
+        RD[("⚡ Redis\n(Cache)")]
     end
 
     %% Fluxos principais
-    P -->|vehicle.detected\nemergency.alert| MQ
-    MQ -->|Consome| LC
-    LC -->|Calcula Pressão\ntraffic.command| MQ
-    MQ -->|Escuta Decisão| P
-    LC -->|Salva Histórico| PG
-    LC -->|Cache (TTL 5m)| RD
-    P -.->|WebSockets Telemetria| DB[Web Dashboard]
-    DB <-->|Ajustes REST| GW
-    GW -->|Roteamento| LC
+    YOLO -->|vehicle.detected\nemergency.alert| MQ
+    MQ -->|Consome filas| LC
+    LC -->|traffic.command\n(Decisão Fuzzy)| MQ
+    MQ -->|Escuta comandos| YOLO
+
+    LC -->|Persiste dados| PG
+    LC <-->|Cache TTL 5m| RD
+    DASH <-->|Configurações REST| GW
+
+    %% Estilização base
+    classDef python fill:#306998,stroke:#FFE873,stroke-width:2px,color:#fff;
+    classDef java fill:#b07219,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef db fill:#336791,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef mq fill:#FF6600,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef dash fill:#00aba9,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef hardware fill:#00979d,stroke:#fff,stroke-width:2px,color:#fff;
+
+    class YOLO python;
+    class EU,GW,LC java;
+    class PG,RD db;
+    class MQ mq;
+    class DASH dash;
+    class ARD hardware;
 ```
 
 ## 💻 Stack Tecnológica
 
-*   **IA e Visão:** Python 3.10+, OpenCV, Ultralytics (YOLOv8)
+O ecossistema do projeto foi construído utilizando as seguintes tecnologias e frameworks:
+
+*   **Inteligência Artificial e Visão Computacional:**
+    *   **Python (3.10+):** Linguagem base para os scripts de processamento na borda.
+    *   **YOLOv8 (Ultralytics):** Modelo de *Deep Learning* estado-da-arte para detecção e classificação de veículos em tempo real.
+    *   **OpenCV:** Biblioteca utilizada para a manipulação dos frames e demarcação das regiões de interesse (ROIs).
+*   **Arquitetura Back-end e Microsserviços:**
+    *   **Java 17 & Spring Boot (3.x):** Base robusta e escalável para a orquestração das regras de negócio e Lógica Fuzzy.
+    *   **Spring Cloud (Eureka & API Gateway):** Ferramentas para *Service Discovery* e roteamento inteligente das requisições REST.
+*   **Mensageria e Persistência de Dados:**
+    *   **RabbitMQ:** *Message broker* que garante a entrega de eventos assíncronos (desacoplamento entre IA e Back-end).
+    *   **PostgreSQL:** Banco de dados relacional para o registro histórico do fluxo de tráfego.
+    *   **Redis:** Armazenamento em memória (*cache*) para acesso ultrarrápido ao estado atual das vias.
+*   **Hardware e Internet das Coisas (IoT):**
+    *   **Arduino:** Microcontrolador responsável pelo acionamento físico dos semáforos, recebendo comandos via comunicação Serial.
 
 
-## 🎥 Demonstração simples
+## ⚙️ Instalação e Execução
 
-<div align="center">
-  <img src="https://github.com/pedrofratassi/identificacao-veiculos/blob/main/static/demo.gif"/>
-</div>
+Devido à natureza distribuída do sistema (arquitetura de microsserviços e processamento de borda), a inicialização do ambiente requer a configuração de diferentes módulos.
 
+### 1. Pré-requisitos
+Certifique-se de ter os seguintes componentes instalados em seu ambiente local:
+- **Docker** (Recomendado para subir rapidamente os serviços de banco e mensageria)
+- **Java JDK 17+** e **Maven** (Para os microsserviços Spring Boot)
+- **Python 3.10+** (Para o módulo de Inteligência Artificial)
 
-## Stack utilizada
-
-**Front-end:** Google Colab
-
-**Back-end:** OpenCV, YOLO e Ultralytics
-
-```
-## Instalação
-
-Instalação necessária para rodar o código:
-
+### 2. Infraestrutura (Dados e Mensageria)
+Inicie os serviços de suporte: RabbitMQ (porta `5673`), PostgreSQL (porta `5433`) e Redis (porta `6379`). Se estiver utilizando Docker, você pode executá-los com:
 ```bash
-# -*- coding: utf-8 -*-
-"""DETECCAR: Detecção de Veículos e Controle de Semáforos Inteligentes com YOLOv8"""
+docker run -d -p 5673:5672 -p 15672:15672 rabbitmq:3-management
+docker run -d -p 5433:5432 -e POSTGRES_USER=smartpath -e POSTGRES_PASSWORD=smartpath123 postgres
+docker run -d -p 6379:6379 redis
+```
 
-# 📌 Importação das bibliotecas necessárias
-import os
-import cv2
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import random
-import warnings
-import yaml
-from PIL import Image
-from ultralytics import YOLO
-from IPython.display import Video, display
+### 3. Microsserviços Java (Back-end)
+Os microsserviços devem ser inicializados na seguinte ordem rigorosa para garantir o correto registro no *Service Discovery*:
+1. **Eureka Server** (`porta 8761`)
+2. **API Gateway** (`porta 8081`)
+3. **Logic Controller** (`porta 8082`)
 
-warnings.filterwarnings('ignore')  # Removendo avisos desnecessários
+Navegue até o diretório de cada serviço e execute:
+```bash
+mvn spring-boot:run
+```
 
-# 📌 Configuração do Seaborn para visualização de gráficos
-sns.set(rc={'axes.facecolor': '#eae8fa'}, style='darkgrid')
+### 4. Camada de Borda (Python & IA)
+No diretório raiz do projeto, instale as dependências da visão computacional e inicie o nó de processamento:
+```bash
+# Instalação das bibliotecas necessárias
+pip install ultralytics opencv-python pika pyserial websockets
+
+# Execução do sistema de visão computacional
+python DETECCAR_ARDUINO.py
 ```
     
-## Funcionalidades
+## ✨ Funcionalidades
 
-- Detecção de veículos
-- Detecção de veículos em tempo-real
-
-
-## Aprendizados
-
-O projeto Semáforo Inteligente foi um grande desafio e uma grande fonte de estímulo para o aprendizado e reflexão, empregando grande parte dos conhecimentos adquiridos ao longo do curso de Tecnologia em Análise e Desenvolvimento de Sistemas.
+- **Visão Computacional em Tempo Real:** Detecção e classificação simultânea de múltiplas categorias de veículos (carros, motos, veículos pesados) e identificação de veículos de emergência (ambulâncias) utilizando YOLOv8.
+- **Tomada de Decisão Inteligente (Lógica Fuzzy):** O Cérebro da aplicação (Back-end em Java) calcula dinamicamente o tempo ideal de abertura de cada semáforo com base no volume de tráfego atual e no tempo de espera (*starvation*).
+- **Telemetria e Monitoramento:** Um *Dashboard Web* interativo atualizado via WebSockets exibe o streaming de vídeo processado, a contagem de veículos e o estado atual das vias.
+- **Integração Física (IoT):** Comunicação em tempo real com microcontroladores (Arduino) para o acionamento físico dos relés que controlam as luzes dos semáforos reais.
+- **Arquitetura Tolerante a Falhas:** Uso de filas no RabbitMQ garantindo que picos de processamento nos frames de vídeo não sobrecarreguem o sistema de tomada de decisão.
 
 
-## Melhorias para Trabalhos  Futuros
+## 📚 Referências
 
-Em perspectiva futuras atualizações do software, manifesta-se a possibilidade em ampliar a capacidade do sistema para detectar não somente veículos, mas também de pedestres. Planeja-se também a implementação do método para o controle da via. Outro ponto relevante para evolução é a introdução de câmeras inteligentes e sensores no sistema, visando o aprimoramento do software para poder ser utilizando em situação real de controle de tráfego de veículos e pedestres. As incorporações tecnológicas proporcionarão uma perspectiva mais ampla e aprofundada do ambiente, permitindo ajustes dinâmicos e eficientes nas condições do tráfego de veículos.
+Esta seção consolida as fontes de dados, bibliotecas de software e literaturas científicas que embasaram o desenvolvimento tecnológico e teórico do **SmartPath**.
 
+### Conjunto de Dados (Dataset) e Código Auxiliar
+- **Base Experimental (Kaggle):** [Real-Time Traffic Density Estimation with YOLOv8](https://www.kaggle.com/code/farzadnekouei/real-time-traffic-density-estimation-with-yolov8) — *Referência fundamental para o fluxo inicial de pipeline e modelagem visual.*
 
-## Referências
-Nesta seção, você encontrará a fonte dos dados como os códigos e bibliotecas que foram utilizados neste projeto. 
+### Principais Bibliotecas e Frameworks
+- **Inteligência Artificial & Visão:** [Ultralytics (YOLOv8)](https://github.com/ultralytics/ultralytics) | [OpenCV](https://github.com/opencv/opencv)
+- **Ecossistema Back-end:** [Spring Boot & Spring Cloud](https://spring.io/) | [RabbitMQ](https://www.rabbitmq.com/)
 
-### Bibliotecas Utilizadas
- - [OpenCV](https://github.com/opencv/opencv)
- - [YOLO](https://github.com/AlexeyAB/darknet)
- - [Ultralytics](https://github.com/ultralytics/ultralytics)
-
-### Trabalhos Correlatos
-Esta subseção apresenta alguns trabalhos que foram utilizados como referência para o desenvolvimento deste trabalho. Estes trabalhos contribuíram para a escolha de alguns conceitos, tecnologias ou técnicas, que foram utilizados neste trabalho.
-
-- [An intelligent control system for traffic lights with simulation-based evaluation](https://www.sciencedirect.com/science/article/abs/pii/S096706611630212X)
-
- - [Internet of smart-cameras for traffic lights optimization in smart cities](https://www.sciencedirect.com/science/article/pii/S2542660520300433)
-
-### Fonte dos Dados e Código Utilizado
- - [Real-Time Traffic Density Estimation with YOLOv8](https://www.kaggle.com/code/farzadnekouei/real-time-traffic-density-estimation-with-yolov8)
-
-Este conjunto de dados e código foram fundamentais para o desenvolvimento e treinamento do modelo de detecção de veículos neste projeto.
-
-## Licença
-
-[MIT](https://choosealicense.com/licenses/mit/)
-
-
-## Autores
-
-- [@pedrofratassi](https://github.com/pedrofratassi)
-
+### Trabalhos Correlatos e Fundamentação Teórica
+Os artigos abaixo serviram como alicerce acadêmico para a escolha de heurísticas de controle e modelagem de tráfego em cidades inteligentes:
+1. *[An intelligent control system for traffic lights with simulation-based evaluation](https://www.sciencedirect.com/science/article/abs/pii/S096706611630212X)*
+2. *[Internet of smart-cameras for traffic lights optimization in smart cities](https://www.sciencedirect.com/science/article/pii/S2542660520300433)*
