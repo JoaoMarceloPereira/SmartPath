@@ -188,8 +188,8 @@ VIDEO_PATH_1 = 'transito.mp4'
 # para simular o segundo cruzamento. Você pode alterar este caminho futuramente.
 VIDEO_PATH_2 = 'transito1.mp4' 
 
-# Usando o modelo padrão do YOLOv8 para facilitar os testes (ele baixa automaticamente)
-MODEL_PATH = 'yolov8n.pt'
+# Usando o modelo treinado do YOLOv8
+MODEL_PATH = 'runs/detect/train-2/weights/best.pt'
 model = YOLO(MODEL_PATH)
 
 # 📌 Tentativa inicial de conexão ao RabbitMQ

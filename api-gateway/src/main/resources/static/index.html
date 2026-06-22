@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DETECCAR - Painel de Controle de Tráfego</title>
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="main-header">
+            <div class="logo-area">
+                <span class="pulse-icon"></span>
+                <h1>DETECCAR <span>Control Center</span></h1>
+            </div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="label">Servidor:</span>
+                    <span id="server-status" class="val status-disconnected">Desconectado</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">Modo:</span>
+                    <span id="control-mode" class="val">Simulador</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Grid de Conteúdo -->
+        <main class="dashboard-grid">
+            
+            <!-- Cruzamento 1 -->
+            <section class="card intersection-card" id="card-intersection-1">
+                <div class="card-header">
+                    <h2>Via Principal (Cruzamento 1)</h2>
+                    <span class="active-badge" id="badge-1">Ocioso</span>
+                </div>
+                
+                <div class="video-container">
+                    <img id="video-stream-1" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Aguardando sinal de vídeo...">
+                    
+                    <!-- Semáforo Overlay -->
+                    <div class="semaphore-overlay" id="semaphore-1">
+                        <div class="lamp red active"></div>
+                        <div class="lamp yellow"></div>
+                        <div class="lamp green"></div>
+                    </div>
+
+                    <!-- HUD de Dados -->
+                    <div class="hud-metrics">
+                        <div class="hud-item">
+                            <span class="lbl">Veículos:</span>
+                            <span class="val" id="vehicles-total-1">0</span>
+                        </div>
+                        <div class="hud-item">
+                            <span class="lbl">Pressão Total:</span>
+                            <span class="val highlight" id="pressure-total-1">0.0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-footer-stats">
+                    <div class="stat-box">
+                        <span class="lbl">Carros</span>
+                        <span class="val" id="cars-1">0</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="lbl">Motos</span>
+                        <span class="val" id="motos-1">0</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="lbl">Pesados</span>
+                        <span class="val" id="heavy-1">0</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="lbl">Espera (Ciclos)</span>
+                        <span class="val" id="starvation-1">0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cruzamento 2 -->
+            <section class="card intersection-card" id="card-intersection-2">
+                <div class="card-header">
+                    <h2>Via Secundária (Cruzamento 2)</h2>
+                    <span class="active-badge" id="badge-2">Ocioso</span>
+                </div>
+                
+                <div class="video-container">
+                    <img id="video-stream-2" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Aguardando sinal de vídeo...">
+                    
+                    <!-- Semáforo Overlay -->
+                    <div class="semaphore-overlay" id="semaphore-2">
+                        <div class="lamp red active"></div>
+                        <div class="lamp yellow"></div>
+                        <div class="lamp green"></div>
+                    </div>
+
+                    <!-- HUD de Dados -->
+                    <div class="hud-metrics">
+                        <div class="hud-item">
+                            <span class="lbl">Veículos:</span>
+                            <span class="val" id="vehicles-total-2">0</span>
+                        </div>
+                        <div class="hud-item">
+                            <span class="lbl">Pressão Total:</span>
+                            <span class="val highlight" id="pressure-total-2">0.0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-footer-stats">
+                    <div class="stat-box">
+                        <span class="lbl">Carros</span>
+                        <span class="val" id="cars-2">0</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="lbl">Motos</span>
+                        <span class="val" id="motos-2">0</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="lbl">Pesados</span>
+                        <span class="val" id="heavy-2">0</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="lbl">Espera (Ciclos)</span>
+                        <span class="val" id="starvation-2">0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Painel de Controle e Cenários -->
+            <section class="card control-card">
+                <div class="card-header">
+                    <h2>Simulação de Cenários</h2>
+                </div>
+                <div class="scenario-controls">
+                    <div class="scenario-group">
+                        <h3>Via Principal (C1)</h3>
+                        <button class="btn btn-emergency" onclick="triggerScenario('emergency', 1)">🚨 Emergência (Ambulância)</button>
+                        <button class="btn btn-pedestrian" onclick="triggerScenario('pedestrian', 1)">🚶 Pedestre Solicitar</button>
+                    </div>
+                    <div class="scenario-group">
+                        <h3>Via Secundária (C2)</h3>
+                        <button class="btn btn-emergency" onclick="triggerScenario('emergency', 2)">🚨 Emergência (Ambulância)</button>
+                        <button class="btn btn-pedestrian" onclick="triggerScenario('pedestrian', 2)">🚶 Pedestre Solicitar</button>
+                    </div>
+                </div>
+
+                <div class="timer-display-box">
+                    <div class="timer-title">Sinal Ativo</div>
+                    <div class="timer-active-via" id="active-via-text">TODOS VERMELHOS</div>
+                    <div class="timer-countdown" id="timer-countdown">00s</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="timer-progress"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Configurações do Sistema -->
+            <section class="card config-card">
+                <div class="card-header">
+                    <h2>Configurações do Algoritmo</h2>
+                </div>
+                <form id="settings-form" class="settings-grid" onsubmit="saveSettings(event)">
+                    <div class="form-group">
+                        <label>Peso Carros</label>
+                        <input type="number" step="0.1" name="peso_carro" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Peso Motos</label>
+                        <input type="number" step="0.1" name="peso_moto" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Peso Veíc. Pesados</label>
+                        <input type="number" step="0.1" name="peso_pesado" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tempo Mínimo Verde (s)</label>
+                        <input type="number" name="min_green" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tempo Máximo Verde (s)</label>
+                        <input type="number" name="max_green" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Fator de Starvation</label>
+                        <input type="number" name="starvation_factor" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tempo Amarelo (s)</label>
+                        <input type="number" name="yellow_duration" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tempo Emergência (s)</label>
+                        <input type="number" name="emergency_duration" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tempo Pedestre (s)</label>
+                        <input type="number" name="pedestrian_duration" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-save">Salvar Parâmetros</button>
+                </form>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -31,7 +31,7 @@ sns.set(rc={'axes.facecolor': '#eae8fa'}, style='darkgrid')
 # 📌 Caminhos dos arquivos (ajuste conforme o seu diretório)
 DATASET_PATH = 'Banco de Dados'
 VIDEO_PATH = 'transito.mp4'  # 📌 Caminho do vídeo
-MODEL_PATH = 'runs/detect/train-3/weights/best.pt'  # 📌 Modelo YOLOv8 pré-treinado
+MODEL_PATH = 'runs/detect/train-2/weights/best.pt'  # 📌 Modelo YOLOv8 treinado
 
 # 📌 Parâmetros do Semáforo Inteligente
 SEMAPHORE_PARAMS = {

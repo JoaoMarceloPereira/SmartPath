@@ -15,9 +15,11 @@ def treinar_modelo():
         epochs=50,              # Número sugerido de épocas para um bom treino completo
         imgsz=640,              # Tamanho de imagem de entrada
         device=0,           # GPU Nvidia RTX 3060 via CUDA
-        batch=16,               # Tamanho do lote
+        batch=8,                # Tamanho do lote reduzido para evitar erro de memória
         optimizer='auto',       # Otimizador automático
-        patience=10             # Parada antecipada se não houver melhoria
+        patience=10,            # Parada antecipada se não houver melhoria
+        workers=4,              # Reduzir número de workers para economizar memória
+        cache=False             # Desativar cache para economizar memória
     )
     print("Treinamento concluído!")
     print("O melhor modelo foi salvo em: runs/detect/train/weights/best.pt")
