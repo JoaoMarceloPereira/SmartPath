@@ -4,43 +4,42 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "traffic_decision")
+@Table(name = "traffic_decisions", indexes = { @Index(name = "idx_decision_timestamp", columnList = "createdAt"), @Index(name = "idx_decision_intersection", columnList = "intersectionId") })
 public class TrafficDecision {
-
+ 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "traffic_decision_seq")
-    @SequenceGenerator(name = "traffic_decision_seq", sequenceName = "traffic_decision_id_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(name = "created_at", nullable = false)
+ 
+    @Column(nullable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "intersection_id", nullable = false)
+ 
+    @Column(nullable = false)
     private String intersectionId;
-
-    @Column(name = "action", nullable = false)
+ 
+    @Column(nullable = false)
     private String action;
-
-    @Column(name = "green_time", nullable = false)
-    private int greenTime;
-
-    @Column(name = "pressure", nullable = false)
-    private double pressure;
-
+ 
+    @Column(nullable = false)
+    private int greenTimeSeconds;
+ 
+    @Column(nullable = false)
+    private double trafficPressure;
+ 
     public TrafficDecision() {}
-
-    public TrafficDecision(LocalDateTime createdAt, String intersectionId, String action, int greenTime, double pressure) {
+ 
+    public TrafficDecision(LocalDateTime createdAt, String intersectionId, String action, int greenTimeSeconds, double trafficPressure) {
         this.createdAt = createdAt;
         this.intersectionId = intersectionId;
         this.action = action;
-        this.greenTime = greenTime;
-        this.pressure = pressure;
+        this.greenTimeSeconds = greenTimeSeconds;
+        this.trafficPressure = trafficPressure;
     }
-
+ 
     public Long getId() { return id; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public String getIntersectionId() { return intersectionId; }
     public String getAction() { return action; }
-    public int getGreenTime() { return greenTime; }
-    public double getPressure() { return pressure; }
+    public int getGreenTimeSeconds() { return greenTimeSeconds; }
+    public double getTrafficPressure() { return trafficPressure; }
 }

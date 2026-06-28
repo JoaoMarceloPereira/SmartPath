@@ -188,8 +188,27 @@ VIDEO_PATH_1 = 'transito.mp4'
 # para simular o segundo cruzamento. Você pode alterar este caminho futuramente.
 VIDEO_PATH_2 = 'transito1.mp4' 
 
-# Usando o modelo treinado do YOLOv8
-MODEL_PATH = 'runs/detect/train-2/weights/best.pt'
+def encontrar_modelo_mais_recente():
+    """Encontra o caminho para o arquivo 'best.pt' do treinamento mais recente."""
+    runs_dir = 'runs/detect'
+    model_path = None
+    try:
+        if os.path.exists(runs_dir):
+            # Lista todos os diretórios de treino e pega o mais recente
+            train_dirs = [os.path.join(runs_dir, d) for d in os.listdir(runs_dir) if d.startswith('train')]
+            if train_dirs:
+                latest_run_dir = max(train_dirs, key=os.path.getmtime)
+                candidate_path = os.path.join(latest_run_dir, 'weights', 'best.pt')
+                if os.path.exists(candidate_path):
+                    model_path = candidate_path
+                    print(f"✅ Modelo mais recente encontrado em: {model_path}")
+    except (FileNotFoundError, ValueError):
+        pass # Ignora se a pasta 'runs/detect' não existir ou estiver vazia.
+    return model_path
+
+MODEL_PATH = encontrar_modelo_mais_recente()
+if not MODEL_PATH:
+    raise FileNotFoundError("❌ ERRO: Nenhum modelo treinado ('best.pt') foi encontrado na pasta 'runs/detect/'. Execute o script 'treinar.py' primeiro.")
 model = YOLO(MODEL_PATH)
 
 # 📌 Tentativa inicial de conexão ao RabbitMQ
