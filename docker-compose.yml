@@ -1,4 +1,9 @@
 services:
+
+  # ────────────────────────────────────────────
+  #  INFRAESTRUTURA
+  # ────────────────────────────────────────────
+
   postgres:
     image: postgres:15-alpine
     container_name: smartpath-postgres
@@ -7,10 +12,37 @@ services:
       POSTGRES_PASSWORD: smartpath123
       POSTGRES_DB: smartpath
     ports:
-      - "5433:5432" # Mapeado para 5433 para evitar conflito com o Windows
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartpath"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartpath-net
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: smartpath-timescaledb
+    environment:
+      POSTGRES_USER: smartpath
+      POSTGRES_PASSWORD: smartpath123
+      POSTGRES_DB: smartpath_iot
+    ports:
+      - "5434:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartpath"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartpath-net
 
   redis:
     image: redis:7-alpine
@@ -18,17 +50,276 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartpath-net
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: smartpath-rabbitmq
     ports:
-      - "5673:5672"   # Mapeada para 5673 na máquina hospedeira para evitar conflito
-      - "15673:15672" # Porta do painel web mapeada para 15673 para evitar conflito
+      - "5673:5672"
+      - "15673:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - smartpath-net
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: smartpath-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: unless-stopped
+    networks:
+      - smartpath-net
+
+  # ────────────────────────────────────────────
+  #  DESCOBERTA E CONFIGURAÇÃO
+  # ────────────────────────────────────────────
+
+  eureka-server:
+    build:
+      context: ./eureka-server
+    container_name: smartpath-eureka
+    ports:
+      - "8761:8761"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    networks:
+      - smartpath-net
+
+  config-server:
+    build:
+      context: ./config-server
+    container_name: smartpath-config-server
+    ports:
+      - "8888:8888"
+    restart: unless-stopped
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8888/actuator/health | grep UP || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    networks:
+      - smartpath-net
+
+  # ────────────────────────────────────────────
+  #  API GATEWAY
+  # ────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+    container_name: smartpath-api-gateway
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    networks:
+      - smartpath-net
+
+  # ────────────────────────────────────────────
+  #  MICROSERVIÇOS
+  # ────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: smartpath-auth-service
+    environment:
+      - PGUSER=smartpath
+      - PGHOST=postgres
+      - PGDATABASE=smartpath
+      - PGPASSWORD=smartpath123
+      - PGPORT=5432
+      - JWT_SECRET=super_secret_smartpath_key
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - smartpath-net
+
+  traffic-service:
+    build:
+      context: ./traffic-service
+    container_name: smartpath-traffic-service
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/smartpath
+      - SPRING_DATASOURCE_USERNAME=smartpath
+      - SPRING_DATASOURCE_PASSWORD=smartpath123
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - smartpath-net
+
+  traffic-light-service:
+    build:
+      context: ./traffic-light-service
+    container_name: smartpath-traffic-light-service
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smartpath-net
+
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: smartpath-ai-service
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smartpath-net
+
+  iot-service:
+    build:
+      context: ./iot-service
+    container_name: smartpath-iot-service
+    environment:
+      - PGUSER=smartpath
+      - PGPASSWORD=smartpath123
+      - PGHOST=timescaledb
+      - PGDATABASE=smartpath_iot
+      - PGPORT=5432
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+    ports:
+      - "8003:8003"
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smartpath-net
+
+  notification-service:
+    build:
+      context: ./notification-service
+    container_name: smartpath-notification-service
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smartpath-net
+
+  report-service:
+    build:
+      context: ./report-service
+    container_name: smartpath-report-service
+    environment:
+      - PGUSER=smartpath
+      - PGHOST=postgres
+      - PGDATABASE=smartpath
+      - PGPASSWORD=smartpath123
+      - PGPORT=5432
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - smartpath-net
+
+  # ────────────────────────────────────────────
+  #  OBSERVABILIDADE
+  # ────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: smartpath-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    networks:
+      - smartpath-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: smartpath-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=smartpath123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    networks:
+      - smartpath-net
+
+# ────────────────────────────────────────────
+#  VOLUMES E REDE
+# ────────────────────────────────────────────
 
 volumes:
   postgres_data:
+  timescaledb_data:
+  grafana_data:
+
+networks:
+  smartpath-net:
+    driver: bridge

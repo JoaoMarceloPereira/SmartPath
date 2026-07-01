@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: auth-service
+          uri: http://auth-service:8082
+          predicates:
+            - Path=/auth/**
+        
+        - id: ai-service
+          uri: http://ai-service:8000
+          predicates:
+            - Path=/ai/**
+          filters:
+            - AuthenticationFilter
+            - RewritePath=/ai/(?<segment>.*), /$\{segment}
+            
+        - id: traffic-service
+          uri: http://traffic-service:8081
+          predicates:
+            - Path=/traffic/**
+          filters:
+            - AuthenticationFilter
+            - RewritePath=/traffic/(?<segment>.*), /$\{segment}
+            
+        - id: iot-service
+          uri: http://iot-service:8003
+          predicates:
+            - Path=/iot/**
+          filters:
+            - RewritePath=/iot/(?<segment>.*), /$\{segment}
+
+        - id: report-service
+          uri: http://report-service:8085
+          predicates:
+            - Path=/reports/**
+          filters:
+            - AuthenticationFilter
+            - RewritePath=/reports/(?<segment>.*), /reports/$\{segment}
+
+        - id: notification-service
+          uri: http://notification-service:8084
+          predicates:
+            - Path=/notifications/**
+          filters:
+            - AuthenticationFilter
+            - RewritePath=/notifications/(?<segment>.*), /$\{segment}
+
+server:
+  port: 8080
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
